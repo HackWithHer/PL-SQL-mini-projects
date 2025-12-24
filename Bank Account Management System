@@ -1,0 +1,159 @@
+CREATE TABLE customers(
+   customer_id NUMBER PRIMARY KEY,
+   customer_name VARCHAR2(50),
+   cutomer_phone VARCHAR2(15),
+   city VARCHAR2(30)
+  );
+  
+CREATE TABLE accounts (
+   account_id NUMBER PRIMARY KEY,
+   customer_id NUMBER,
+   balance NUMBER,
+   CONSTRAINT fk_customer FOREIGN KEY (customer_id)
+   REFERENCES customers(customer_id)
+  );
+  
+CREATE TABLE transactions (
+    txn_id NUMBER PRIMARY KEY,
+    account_id NUMBER,
+    txn_type VARCHAR2(20),
+    amount NUMBER(10,2),
+    txn_date DATE,
+    CONSTRAINT fk_account FOREIGN KEY (account_id)
+    REFERENCES accounts(account_id)
+);
+
+CREATE SEQUENCE cust_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE acc_seq START WITH 1001 INCREMENT BY 1;
+CREATE SEQUENCE txn_seq START WITH 1 INCREMENT BY 1;
+
+       
+INSERT INTO customers VALUES (cust_seq.NEXTVAL, 'Nishita pathak', '9129575335', 'Indore');
+INSERT INTO customers VALUES (cust_seq.NEXTVAL, 'Shivani Agrawal ', '9123456789', 'Ahmedabad');
+INSERT INTO customers VALUES (cust_seq.NEXTVAL, 'Vishal Kushwaha', '9012345678', 'Mumbai');
+INSERT INTO customers VALUES (cust_seq.NEXTVAL, 'Taiyaba Qumer', '9988776655', 'Lucknow');
+INSERT INTO customers VALUES (cust_seq.NEXTVAL, 'Swati Tripathi', '9090909090', 'Bangalore');
+INSERT INTO customers VALUES (cust_seq.NEXTVAL, 'Shivam Rai', '9876501234', 'Jaipur');
+INSERT INTO customers VALUES (cust_seq.NEXTVAL, 'Kartikey Tripathi', '9845012345', 'Kochi');
+INSERT INTO customers VALUES (cust_seq.NEXTVAL, 'Varsha rajpoot','9765432109', 'Pune');
+INSERT INTO customers VALUES (cust_seq.NEXTVAL, 'Yashwani Gupta', '9955667788', 'Indore');
+INSERT INTO customers VALUES (cust_seq.NEXTVAL,'kartik Raghuwanshi', '9898989898', 'Kolkata');
+
+
+INSERT INTO accounts VALUES (acc_seq.NEXTVAL, 1, 1000);
+INSERT INTO accounts VALUES (acc_seq.NEXTVAL, 2, 2000);
+INSERT INTO accounts VALUES (acc_seq.NEXTVAL, 3, 3000);
+INSERT INTO accounts VALUES (acc_seq.NEXTVAL, 4, 4000);
+INSERT INTO accounts VALUES (acc_seq.NEXTVAL, 5, 5000);
+INSERT INTO accounts VALUES (acc_seq.NEXTVAL, 6, 6000);
+INSERT INTO accounts VALUES (acc_seq.NEXTVAL, 7, 7000);
+INSERT INTO accounts VALUES (acc_seq.NEXTVAL, 8, 8000);
+INSERT INTO accounts VALUES (acc_seq.NEXTVAL, 9, 9000);
+INSERT INTO accounts VALUES (acc_seq.NEXTVAL,10,10000);
+
+COMMIT;
+
+CREATE OR REPLACE FUNCTION get_balance(p_acc_id NUMBER)
+RETURN NUMBER
+IS
+  
+   v_balance NUMBER;
+BEGIN
+   SELECT balance INTO v_balance 
+   FROM accounts
+   WHERE account_id = p_acc_id;
+   
+   RETURN v_balance;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RETURN -1;
+
+END;
+/
+
+CREATE OR REPLACE PROCEDURE deposit_money(
+    p_acc_id NUMBER,
+    p_amount NUMBER
+)
+IS
+BEGIN
+    UPDATE accounts
+    SET balance = balance + p_amount
+    WHERE account_id = p_acc_id;
+
+    INSERT INTO transactions
+    VALUES (txn_seq.NEXTVAL, p_acc_id, 'DEPOSIT', p_amount, SYSDATE);
+
+    COMMIT;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE withdraw_money(
+    p_acc_id NUMBER,
+    p_amount NUMBER
+)
+IS
+    v_balance NUMBER;
+BEGIN
+    SELECT balance INTO v_balance
+    FROM accounts
+    WHERE account_id = p_acc_id;
+
+    IF v_balance < p_amount THEN
+        RAISE_APPLICATION_ERROR(-20001,'Insufficient Balance');
+    END IF;
+
+    UPDATE accounts
+    SET balance = balance - p_amount
+    WHERE account_id = p_acc_id;
+    
+    INSERT INTO transactions
+    VALUES (txn_seq.NEXTVAL, p_acc_id, 'WITHDRAW', p_amount, SYSDATE);
+
+    COMMIT;
+END;
+/
+
+
+CREATE OR REPLACE TRIGGER trg_auto_txn
+AFTER UPDATE OF balance ON accounts
+FOR EACH ROW
+BEGIN
+    IF :NEW.balance > :OLD.balance THEN
+        INSERT INTO transactions
+        VALUES (
+            txn_seq.NEXTVAL,
+            :NEW.account_id,
+            'AUTO_DEPOSIT',
+            :NEW.balance - :OLD.balance,
+            SYSDATE
+        );
+    END IF;
+END;
+/
+
+SELECT * FROM customers;
+SELECT * FROM accounts;
+
+BEGIN 
+   deposit_money(1001, 500);
+END;
+/
+
+BEGIN
+   withdraw_money(1001, 300);
+END;
+/
+
+SELECT get_balance(1001) AS balance FROM dual;
+
+SELECT * FROM transactions
+WHERE account_id = 1001
+ORDER BY txn_date;
+
+
+
+
+
+   
+   
