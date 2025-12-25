@@ -1,0 +1,160 @@
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE stock_transactions';
+    EXECUTE IMMEDIATE 'DROP TABLE products';
+    EXECUTE IMMEDIATE 'DROP TABLE suppliers';
+    EXECUTE IMMEDIATE 'DROP SEQUENCE supp_seq';
+    EXECUTE IMMEDIATE 'DROP SEQUENCE prod_seq';
+    EXECUTE IMMEDIATE 'DROP SEQUENCE txn_seq';
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END;
+/
+
+CREATE SEQUENCE supp_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE prod_seq START WITH 101 INCREMENT BY 1;
+CREATE SEQUENCE txn_seq START WITH 1 INCREMENT BY 1;
+
+CREATE TABLE suppliers (
+    supplier_id NUMBER PRIMARY KEY,
+    supplier_name VARCHAR2(60),
+    city VARCHAR2(30)
+);
+
+CREATE TABLE products (
+    product_id NUMBER PRIMARY KEY,
+    product_name VARCHAR2(50),
+    supplier_id NUMBER,
+    stock_qty NUMBER,
+    reorder_level NUMBER
+);
+
+CREATE TABLE stock_transactions (
+    txn_id NUMBER PRIMARY KEY,
+    product_id NUMBER,
+    txn_type VARCHAR2(10),
+    quantity NUMBER,
+    txn_date DATE
+);
+
+INSERT INTO suppliers VALUES (supp_seq.NEXTVAL,'Reliance Retail','Mumbai');
+INSERT INTO suppliers VALUES (supp_seq.NEXTVAL,'Tata Consumer Products','Mumbai');
+INSERT INTO suppliers VALUES (supp_seq.NEXTVAL,'Flipkart Wholesale','Bangalore');
+INSERT INTO suppliers VALUES (supp_seq.NEXTVAL,'Amazon India','Bangalore');
+INSERT INTO suppliers VALUES (supp_seq.NEXTVAL,'ITC Limited','Kolkata');
+INSERT INTO suppliers VALUES (supp_seq.NEXTVAL,'Adani Wilmar','Ahmedabad');
+INSERT INTO suppliers VALUES (supp_seq.NEXTVAL,'Hindustan Unilever','Mumbai');
+INSERT INTO suppliers VALUES (supp_seq.NEXTVAL,'Godrej Consumer Products','Mumbai');
+INSERT INTO suppliers VALUES (supp_seq.NEXTVAL,'Metro Cash & Carry India','Bangalore');
+INSERT INTO suppliers VALUES (supp_seq.NEXTVAL,'Future Supply Chain','Mumbai');
+
+INSERT INTO products VALUES (prod_seq.NEXTVAL,'Laptop',1,50,10);
+INSERT INTO products VALUES (prod_seq.NEXTVAL,'Keyboard',2,120,25);
+INSERT INTO products VALUES (prod_seq.NEXTVAL,'Mouse',3,200,40);
+INSERT INTO products VALUES (prod_seq.NEXTVAL,'Monitor',4,35,10);
+INSERT INTO products VALUES (prod_seq.NEXTVAL,'Printer',5,20,5);
+INSERT INTO products VALUES (prod_seq.NEXTVAL,'Scanner',6,18,5);
+INSERT INTO products VALUES (prod_seq.NEXTVAL,'Router',7,60,15);
+INSERT INTO products VALUES (prod_seq.NEXTVAL,'Switch',8,30,10);
+INSERT INTO products VALUES (prod_seq.NEXTVAL,'Hard Disk',9,90,20);
+INSERT INTO products VALUES (prod_seq.NEXTVAL,'Pen Drive',10,250,60);
+
+COMMIT;
+
+CREATE OR REPLACE FUNCTION get_available_stock(p_product_id NUMBER)
+RETURN NUMBER
+IS
+    v_stock NUMBER;
+BEGIN
+    SELECT stock_qty INTO v_stock FROM products WHERE product_id = p_product_id;
+    RETURN v_stock;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RETURN -1;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE stock_in(
+    p_product_id NUMBER,
+    p_qty NUMBER
+)
+IS
+BEGIN
+    UPDATE products
+    SET stock_qty = stock_qty + p_qty
+    WHERE product_id = p_product_id;
+
+    INSERT INTO stock_transactions
+    VALUES (txn_seq.NEXTVAL, p_product_id, 'IN', p_qty, SYSDATE);
+
+    COMMIT;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE stock_out(
+    p_product_id NUMBER,
+    p_qty NUMBER
+)
+IS
+    v_stock NUMBER;
+BEGIN
+    SELECT stock_qty INTO v_stock FROM products WHERE product_id = p_product_id;
+
+    IF v_stock < p_qty THEN
+        RAISE_APPLICATION_ERROR(-20001,'INSUFFICIENT STOCK');
+    END IF;
+
+    UPDATE products
+    SET stock_qty = stock_qty - p_qty
+    WHERE product_id = p_product_id;
+
+    INSERT INTO stock_transactions
+    VALUES (txn_seq.NEXTVAL, p_product_id, 'OUT', p_qty, SYSDATE);
+
+    COMMIT;
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_stock_txn
+AFTER INSERT ON stock_transactions
+FOR EACH ROW
+BEGIN
+    NULL;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE low_stock_report
+IS
+    CURSOR c1 IS
+        SELECT product_name, stock_qty, reorder_level
+        FROM products
+        WHERE stock_qty <= reorder_level;
+BEGIN
+    FOR r IN c1 LOOP
+        DBMS_OUTPUT.PUT_LINE(r.product_name || ' LOW STOCK ' || r.stock_qty);
+    END LOOP;
+END;
+/
+
+BEGIN
+    stock_out(101,45);
+    stock_out(104,30);
+    stock_out(105,18);
+    stock_in(106,10);
+END;
+/
+
+SELECT p.product_name,
+       s.supplier_name,
+       p.stock_qty
+FROM products p
+JOIN suppliers s
+ON p.supplier_id = s.supplier_id
+ORDER BY p.product_id;
+
+SELECT * FROM stock_transactions ORDER BY txn_date;
+
+SELECT product_name, stock_qty, reorder_level
+FROM products
+WHERE stock_qty <= reorder_level;
+
+SELECT get_available_stock(101) FROM dual;
