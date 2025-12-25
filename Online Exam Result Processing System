@@ -1,0 +1,215 @@
+BEGIN
+    EXECUTE IMMEDIATE 'DROP TABLE results';
+    EXECUTE IMMEDIATE 'DROP TABLE marks';
+    EXECUTE IMMEDIATE 'DROP TABLE subjects';
+    EXECUTE IMMEDIATE 'DROP TABLE students';
+    EXECUTE IMMEDIATE 'DROP SEQUENCE stu_seq';
+    EXECUTE IMMEDIATE 'DROP SEQUENCE sub_seq';
+EXCEPTION
+    WHEN OTHERS THEN NULL;
+END;
+/
+
+CREATE SEQUENCE stu_seq START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE sub_seq START WITH 101 INCREMENT BY 1;
+
+CREATE TABLE students (
+    student_id NUMBER PRIMARY KEY,
+    student_name VARCHAR2(50),
+    city VARCHAR2(30)
+);
+
+CREATE TABLE subjects (
+    subject_id NUMBER PRIMARY KEY,
+    subject_name VARCHAR2(30)
+);
+
+CREATE TABLE marks (
+    student_id NUMBER,
+    subject_id NUMBER,
+    marks NUMBER,
+    CONSTRAINT pk_marks PRIMARY KEY (student_id, subject_id)
+);
+
+CREATE TABLE results (
+    student_id NUMBER PRIMARY KEY,
+    total_marks NUMBER,
+    percentage NUMBER(5,2),
+    grade VARCHAR2(2),
+    result_status VARCHAR2(10),
+    rank NUMBER
+);
+
+INSERT INTO students VALUES (stu_seq.NEXTVAL,'Rahul','Delhi');
+INSERT INTO students VALUES (stu_seq.NEXTVAL,'Amit','Mumbai');
+INSERT INTO students VALUES (stu_seq.NEXTVAL,'Neha','Pune');
+INSERT INTO students VALUES (stu_seq.NEXTVAL,'Priya','Chennai');
+INSERT INTO students VALUES (stu_seq.NEXTVAL,'Rohit','Bangalore');
+INSERT INTO students VALUES (stu_seq.NEXTVAL,'Anjali','Hyderabad');
+INSERT INTO students VALUES (stu_seq.NEXTVAL,'Vikas','Kolkata');
+INSERT INTO students VALUES (stu_seq.NEXTVAL,'Sneha','Jaipur');
+INSERT INTO students VALUES (stu_seq.NEXTVAL,'Karan','Indore');
+INSERT INTO students VALUES (stu_seq.NEXTVAL,'Pooja','Bhopal');
+
+INSERT INTO subjects VALUES (sub_seq.NEXTVAL,'DBMS');
+INSERT INTO subjects VALUES (sub_seq.NEXTVAL,'OS');
+INSERT INTO subjects VALUES (sub_seq.NEXTVAL,'CN');
+INSERT INTO subjects VALUES (sub_seq.NEXTVAL,'Java');
+INSERT INTO subjects VALUES (sub_seq.NEXTVAL,'Maths');
+
+INSERT INTO marks VALUES (1,101,95);
+INSERT INTO marks VALUES (1,102,92);
+INSERT INTO marks VALUES (1,103,90);
+INSERT INTO marks VALUES (1,104,94);
+INSERT INTO marks VALUES (1,105,96);
+
+INSERT INTO marks VALUES (2,101,85);
+INSERT INTO marks VALUES (2,102,82);
+INSERT INTO marks VALUES (2,103,80);
+INSERT INTO marks VALUES (2,104,83);
+INSERT INTO marks VALUES (2,105,84);
+
+INSERT INTO marks VALUES (3,101,70);
+INSERT INTO marks VALUES (3,102,72);
+INSERT INTO marks VALUES (3,103,68);
+INSERT INTO marks VALUES (3,104,75);
+INSERT INTO marks VALUES (3,105,74);
+
+INSERT INTO marks VALUES (4,101,62);
+INSERT INTO marks VALUES (4,102,65);
+INSERT INTO marks VALUES (4,103,60);
+INSERT INTO marks VALUES (4,104,64);
+INSERT INTO marks VALUES (4,105,63);
+
+INSERT INTO marks VALUES (5,101,52);
+INSERT INTO marks VALUES (5,102,50);
+INSERT INTO marks VALUES (5,103,55);
+INSERT INTO marks VALUES (5,104,53);
+INSERT INTO marks VALUES (5,105,54);
+
+INSERT INTO marks VALUES (6,101,45);
+INSERT INTO marks VALUES (6,102,48);
+INSERT INTO marks VALUES (6,103,42);
+INSERT INTO marks VALUES (6,104,44);
+INSERT INTO marks VALUES (6,105,46);
+
+INSERT INTO marks VALUES (7,101,30);
+INSERT INTO marks VALUES (7,102,35);
+INSERT INTO marks VALUES (7,103,28);
+INSERT INTO marks VALUES (7,104,32);
+INSERT INTO marks VALUES (7,105,34);
+
+INSERT INTO marks VALUES (8,101,20);
+INSERT INTO marks VALUES (8,102,25);
+INSERT INTO marks VALUES (8,103,18);
+INSERT INTO marks VALUES (8,104,22);
+INSERT INTO marks VALUES (8,105,24);
+
+INSERT INTO marks VALUES (9,101,75);
+INSERT INTO marks VALUES (9,102,78);
+INSERT INTO marks VALUES (9,103,72);
+INSERT INTO marks VALUES (9,104,76);
+INSERT INTO marks VALUES (9,105,74);
+
+INSERT INTO marks VALUES (10,101,55);
+INSERT INTO marks VALUES (10,102,58);
+INSERT INTO marks VALUES (10,103,52);
+INSERT INTO marks VALUES (10,104,54);
+INSERT INTO marks VALUES (10,105,56);
+
+COMMIT;
+
+CREATE OR REPLACE FUNCTION calc_grade(p_percentage NUMBER)
+RETURN VARCHAR2
+IS
+BEGIN
+    IF p_percentage >= 90 THEN
+        RETURN 'A+';
+    ELSIF p_percentage >= 80 THEN
+        RETURN 'A';
+    ELSIF p_percentage >= 70 THEN
+        RETURN 'B+';
+    ELSIF p_percentage >= 60 THEN
+        RETURN 'B';
+    ELSIF p_percentage >= 50 THEN
+        RETURN 'C+';
+    ELSIF p_percentage >= 40 THEN
+        RETURN 'C';
+    ELSE
+        RETURN 'F';
+    END IF;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE process_results
+IS
+    CURSOR c1 IS SELECT DISTINCT student_id FROM marks;
+    v_total NUMBER;
+    v_percentage NUMBER;
+    v_grade VARCHAR2(2);
+    v_status VARCHAR2(10);
+BEGIN
+    FOR r IN c1 LOOP
+        SELECT SUM(marks) INTO v_total FROM marks WHERE student_id = r.student_id;
+        v_percentage := (v_total / 500) * 100;
+        v_grade := calc_grade(v_percentage);
+        IF v_grade = 'F' THEN
+            v_status := 'FAIL';
+        ELSE
+            v_status := 'PASS';
+        END IF;
+        INSERT INTO results VALUES (r.student_id, v_total, v_percentage, v_grade, v_status, NULL);
+    END LOOP;
+    COMMIT;
+END;
+/
+
+CREATE OR REPLACE PROCEDURE generate_rank
+IS
+    CURSOR c2 IS SELECT student_id FROM results ORDER BY total_marks DESC;
+    v_rank NUMBER := 1;
+BEGIN
+    FOR r IN c2 LOOP
+        UPDATE results SET rank = v_rank WHERE student_id = r.student_id;
+        v_rank := v_rank + 1;
+    END LOOP;
+    COMMIT;
+END;
+/
+
+CREATE OR REPLACE TRIGGER trg_result_status
+BEFORE INSERT ON results
+FOR EACH ROW
+BEGIN
+    IF :NEW.percentage < 40 THEN
+        :NEW.result_status := 'FAIL';
+    ELSE
+        :NEW.result_status := 'PASS';
+    END IF;
+END;
+/
+
+BEGIN
+    process_results;
+    generate_rank;
+END;
+/
+
+SELECT s.student_name,
+       r.total_marks,
+       r.percentage,
+       r.grade,
+       r.result_status,
+       r.rank
+FROM students s
+JOIN results r
+ON s.student_id = r.student_id
+ORDER BY r.rank;
+
+SELECT s.student_name,
+       r.percentage,
+       r.grade
+FROM students s
+JOIN results r
+ON s.student_id = r.student_id
+WHERE r.result_status = 'FAIL';
